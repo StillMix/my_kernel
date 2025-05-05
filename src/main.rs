@@ -1,35 +1,43 @@
-#![no_std] // Не используем стандартную библиотеку
-#![no_main] // Не используем стандартную точку входа
+#![no_std]
+#![no_main]
 
-use my_os::println;
+use my_os::serial_println;
 
-/// Эта функция вызывается при запуске ядра
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
-    // Выводим приветствие
-    println!("Hello, World!");
-    println!("Welcome to my OS!");
-    println!("Press a key to test...");
-    
+    serial_println!("Booting OS...");
+
+    // Инициализируем IDT
+    serial_println!("Starting IDT initialization...");
+    my_os::interrupts::init_idt();
+
+    // Инициализируем PIC
+    serial_println!("Starting PIC initialization...");
+    unsafe {
+        my_os::pic::init();
+    }
+
+    serial_println!("Enabling interrupts...");
+    // Разрешаем прерывания
+    x86_64::instructions::interrupts::enable();
+    serial_println!("Interrupts enabled");
+
+    serial_println!("System initialized. Press any key...");
+
+    // Добавим счетчик циклов для отладки
+    let mut loop_count = 0;
+
     loop {
-        // Пытаемся прочитать данные с клавиатуры
-        use my_os::keyboard;
-        use x86_64::instructions::port::Port;
-        
-        // Проверяем, есть ли данные от клавиатуры
-        let mut status_port = Port::new(0x64);
-        let status: u8 = unsafe { status_port.read() };
-        
-        // Если бит 0 установлен, значит есть данные для чтения
-        if status & 1 == 1 {
-            keyboard::handle_keyboard();
+        // Показываем, что система всё еще работает
+        if loop_count % 100_000_000 == 0 {
+            serial_println!(
+                "Waiting for keyboard input... (loop {})",
+                loop_count / 100_000_000
+            );
         }
+        loop_count += 1;
+
+        // Ожидаем прерываний
+        x86_64::instructions::hlt();
     }
 }
-
-// /// Эта функция вызывается при панике
-// #[panic_handler]
-// fn panic(info: &PanicInfo) -> ! {
-//     println!("{}", info);
-//     loop {}
-// }

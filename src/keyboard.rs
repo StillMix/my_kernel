@@ -1,8 +1,9 @@
-use crate::{print, println};
+use crate::print;
+
 use lazy_static::lazy_static;
+use crate::serial_println;
 use spin::Mutex;
 use x86_64::instructions::port::Port;
-
 // Buffer size for storing keyboard input
 const BUFFER_SIZE: usize = 64;
 
@@ -25,6 +26,11 @@ impl KeyboardBuffer {
         }
     }
 
+    // Print the prompt character
+    pub fn print_prompt(&self) {
+        print!("> ");
+    }
+
     // Add a character to the buffer
     pub fn add_char(&mut self, c: u8) {
         if self.position < BUFFER_SIZE - 1 {
@@ -40,8 +46,8 @@ impl KeyboardBuffer {
         if self.position > 0 {
             self.position -= 1;
             self.buffer[self.position] = 0;
-            
-            // Используем метод backspace из Writer
+
+            // Use VGA buffer's backspace method
             use crate::vga_buffer::WRITER;
             WRITER.lock().backspace();
         }
@@ -49,14 +55,16 @@ impl KeyboardBuffer {
 
     // Process the Enter key - show the completed word
     pub fn process_line(&mut self) {
-        println!("");
+        serial_println!("");
         if self.position > 0 {
-            println!(
+            serial_println!(
                 "You typed: {}",
                 core::str::from_utf8(&self.buffer[0..self.position]).unwrap_or("Invalid UTF-8")
             );
             self.clear();
         }
+        // Print prompt for the next line
+        self.print_prompt();
     }
 
     // Clear the buffer
@@ -68,7 +76,9 @@ impl KeyboardBuffer {
 
 pub fn init() {
     // Initialize keyboard interrupt handling
-    println!("Keyboard initialization...");
+    serial_println!("Keyboard initialization...");
+    // Print the initial prompt
+    INPUT_BUFFER.lock().print_prompt();
 }
 
 // Function to read scancode from keyboard port
@@ -124,12 +134,21 @@ fn scancode_to_ascii(scancode: u8) -> Option<u8> {
 }
 
 // Simple keyboard handler
+// Simple keyboard handler
 pub fn handle_keyboard() {
     let scancode = read_scancode();
 
+    // Обрабатываем только отпускание клавиш (release) чтобы избежать дублирования
+    if scancode & 0x80 != 0 {
+        return;
+    }
+
+    // Отладочный вывод
+    serial_println!("Scancode: {:#02x}", scancode);
+
     // Handle special keys and regular characters
     match scancode {
-        0x01 => println!("ESC pressed"),            // ESC
+        0x01 => serial_println!("ESC pressed"),     // ESC
         0x0E => INPUT_BUFFER.lock().backspace(),    // Backspace
         0x1C => INPUT_BUFFER.lock().process_line(), // Enter
         _ => {
