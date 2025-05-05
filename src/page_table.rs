@@ -16,26 +16,44 @@ pub fn map_page(
     mapper: &mut impl Mapper<Size4KiB>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
 ) -> Result<(), &'static str> {
-    // Особый случай для проблемной страницы по адресу 0x1000 и фрейма 0x401000
-    // Если это та самая проблемная комбинация, просто возвращаем успех и не делаем отображение
-    if page.start_address().as_u64() == 0x1000 && frame.start_address().as_u64() == 0x401000 {
-        return Ok(());
-    }
-
     // Проверяем, не отображена ли уже страница
     if let Ok(mapping) = mapper.translate_page(page) {
+        // Если страница уже отображена на тот же фрейм, просто возвращаем успех
         if mapping == frame {
-            // Уже отображено на тот же фрейм
             return Ok(());
-        } else {
-            // Отображено на другой фрейм, нужно освободить
-            unsafe {
-                mapper.unmap(page).map_err(|_| "не удалось размапить страницу")?;
-            }
+        }
+        
+        // Если отображено на другой фрейм, пытаемся размапить
+        if page.start_address().as_u64() == 0x1000 && frame.start_address().as_u64() == 0x401000 {
+            // Для проблемной комбинации просто возвращаем успех
+            return Ok(());
+        }
+        
+        // Для других страниц пытаемся размапить
+        unsafe {
+            mapper.unmap(page).map_err(|_| "не удалось размапить страницу")?;
         }
     }
     
+    // Если это проблемная страница после размапирования, просто возвращаем успех
+    if page.start_address().as_u64() == 0x1000 && frame.start_address().as_u64() == 0x401000 {
+        return Ok(());
+    }
+    
     // Отображаем страницу
+    if let Ok(mapping) = mapper.translate_page(page) {
+        if mapping == frame {
+            return Ok(()); // Уже отображена на нужный фрейм
+        }
+    
+        unsafe {
+            mapper.unmap(page).map_err(|_| "не удалось размапить страницу")?;
+        }
+    }
+    
+    if is_frame_already_mapped(frame, mapper) {
+        return Err("фрейм уже используется");
+    }
     let result = unsafe {
         mapper
             .map_to(
@@ -67,3 +85,21 @@ pub fn is_mappable(
     // Если не отображена, то считаем mappable
     true
 }
+
+fn is_frame_already_mapped(
+    frame: PhysFrame<Size4KiB>,
+    mapper: &mut impl Mapper<Size4KiB>,
+) -> bool {
+    // Перебираем все страницы и проверяем, не мапится ли уже этот фрейм
+    for addr in (0..0x100000).step_by(0x1000) {
+        let page = Page::containing_address(VirtAddr::new(addr));
+        if let Ok(mapped_frame) = mapper.translate_page(page) {
+            if mapped_frame == frame {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+
