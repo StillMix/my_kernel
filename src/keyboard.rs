@@ -1,5 +1,5 @@
 use x86_64::instructions::port::Port;
-use crate::{print, println};
+use crate::{print, println, serial_println}; 
 use crate::terminal::Terminal;
 use spin::Mutex;
 use lazy_static::lazy_static;
@@ -61,8 +61,24 @@ pub fn scancode_to_ascii(scancode: u8) -> Option<u8> {
 pub fn handle_keyboard() {
     let scancode = read_scancode();
     
-    // Преобразуем скан-код в ASCII и передаем его в терминал
+    serial_println!("Обработка скан-кода: {}", scancode);
+    
+    // Временно отключим обработку ввода для тестирования
+    // Просто выведем символ, если это ASCII
+    if let Some(ascii_code) = scancode_to_ascii(scancode) {
+        serial_println!("ASCII код: {}", ascii_code);
+        if ascii_code == b'\n' {
+            println!();
+            print!("> ");
+        } else if ascii_code != 8 { // не бэкспейс
+            print!("{}", ascii_code as char);
+        }
+    }
+    
+    // Закомментируем сложную обработку, пока не устраним проблему
+    /* 
     if let Some(ascii_code) = scancode_to_ascii(scancode) {
         TERMINAL.lock().input(ascii_code);
     }
+    */
 }

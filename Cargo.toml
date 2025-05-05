@@ -9,6 +9,7 @@ volatile = "0.2.7"  # Используем старую версию библи�
 spin = "0.5.2"
 x86_64 = "0.14.13"
 uart_16550 = "0.2.19"
+pic8259 = "0.10.1"
 
 [dependencies.lazy_static]
 version = "1.4.0"
@@ -23,4 +24,4 @@ panic = "abort"
 [package.metadata.bootimage]
 test-args = ["-device", "isa-debug-exit,iobase=0xf4,iosize=0x04", "-serial", "stdio", "-display", "none"]
 test-success-exit-code = 33
-run-args = ["-serial", "stdio"]
+run-args = ["-serial", "stdio", "-no-reboot"] # добавили -no-reboot
