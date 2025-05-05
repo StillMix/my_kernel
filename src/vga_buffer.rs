@@ -114,9 +114,6 @@ impl Writer {
             self.buffer.chars[row][col].write(blank);
         }
     }
-    pub fn set_color(&mut self, foreground: Color, background: Color) {
-        self.color_code = ColorCode::new(foreground, background);
-    }
 }
 
 impl fmt::Write for Writer {

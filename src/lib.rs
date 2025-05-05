@@ -3,47 +3,19 @@
 #![feature(custom_test_frameworks)]
 #![test_runner(crate::test_runner)]
 #![reexport_test_harness_main = "test_main"]
-#![feature(abi_x86_interrupt)] 
 
 use core::panic::PanicInfo;
 
 pub mod serial;
 pub mod vga_buffer;
-pub mod keyboard;
-pub mod interrupts;  
-pub mod terminal;
-pub mod gdt;  // Добавляем новый модуль
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    serial_println!("ПАНИКА: {}", info);
-    loop {
-        x86_64::instructions::hlt();
-    }
+    println!("{}", info);
+    loop {}
 }
 
-pub fn init() {
-    serial_println!("Инициализация GDT...");
-    gdt::init();
-    
-    serial_println!("Инициализация IDT...");
-    interrupts::init_idt();
-    
-    serial_println!("Инициализация PIC...");
-    unsafe {
-        interrupts::PICS.lock().initialize();
-        
-        // Важно: разрешаем только прерывание клавиатуры
-        // 0xFC вместо 0xFD для проверки - это разрешит IRQ0 (таймер) и IRQ1 (клавиатура)
-        interrupts::PICS.lock().write_masks(0xFC, 0xFF);
-    }
-    
-    serial_println!("Включение прерываний...");
-    x86_64::instructions::interrupts::enable();
-    
-    serial_println!("Инициализация завершена");
-}
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
