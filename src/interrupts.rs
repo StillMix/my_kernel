@@ -164,7 +164,26 @@ fn hlt_loop() -> ! {
         x86_64::instructions::hlt();
     }
 }
-
+// Инициализация клавиатуры
+pub fn init_keyboard() {
+    use x86_64::instructions::port::Port;
+    
+    // Установка маски прерываний для разрешения клавиатуры
+    unsafe {
+        // Получаем текущие маски
+        let mut mask1 = Port::<u8>::new(PIC1_DATA).read();
+        let mask2 = Port::<u8>::new(PIC2_DATA).read();
+        
+        // Разрешаем прерывания клавиатуры (маска: 0xFD = 1111 1101)
+        mask1 &= 0xFD;  // Разрешаем только прерывание клавиатуры (бит 1)
+        
+        // Устанавливаем маски
+        Port::<u8>::new(PIC1_DATA).write(mask1);
+        Port::<u8>::new(PIC2_DATA).write(mask2);
+        
+        println!("Keyboard interrupt enabled!");
+    }
+}
 // Инициализация прерываний
 pub unsafe fn init() {
     println!("Loading IDT...");
@@ -175,9 +194,8 @@ pub unsafe fn init() {
     PICS.lock().initialize();
 
     println!("Setting PIC masks...");
-    // Маскируем все прерывания, кроме клавиатуры и таймера
-    // 0xFC = 1111 1100 - разрешаем только первые два прерывания (0 и 1)
-    PICS.lock().write_masks(0xFC, 0xFF);
+    // Явно инициализируем клавиатуру
+    init_keyboard();
 
     println!("Enabling hardware interrupts...");
     // Разрешаем прерывания
@@ -210,33 +228,31 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     // Вывод отладочной информации
     serial_println!("Keyboard interrupt received!");
 
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        let mut keyboard = KEYBOARD.lock();
-        let mut port = Port::new(0x60);
+    let mut keyboard = KEYBOARD.lock();
+    let mut port = Port::new(0x60);
 
-        let scancode: u8 = unsafe { port.read() };
+    let scancode: u8 = unsafe { port.read() };
 
-        // Вывод скан-кода
-        serial_println!("Scancode: {}", scancode);
+    // Вывод скан-кода
+    serial_println!("Scancode: {}", scancode);
 
-        if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-            if let Some(key) = keyboard.process_keyevent(key_event) {
-                match key {
-                    DecodedKey::Unicode(character) => {
-                        serial_println!("Pressed key: {}", character);
-                        print!("{}", character);
-                    }
-                    DecodedKey::RawKey(key) => {
-                        serial_println!("Pressed raw key: {:?}", key);
-                        print!("{:?}", key);
-                    }
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => {
+                    serial_println!("Pressed key: {}", character);
+                    print!("{}", character);
+                }
+                DecodedKey::RawKey(key) => {
+                    serial_println!("Pressed raw key: {:?}", key);
+                    print!("{:?}", key);
                 }
             }
         }
+    }
 
-        unsafe {
-            PICS.lock()
-                .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
-        }
-    });
+    unsafe {
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
+    }
 }

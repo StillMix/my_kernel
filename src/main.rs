@@ -36,7 +36,11 @@ pub extern "C" fn _start() -> ! {
     unsafe { interrupts::init(); }
     
     println!("Interrupts initialized!");
-    println!("Press any key to test keyboard input...");
+    println!("Keyboard is now active!");
+    println!("Press any key to test input...");
+    
+    // Явно включаем прерывания (на всякий случай)
+    x86_64::instructions::interrupts::enable();
     
     // Бесконечный цикл ожидания
     hlt_loop();
