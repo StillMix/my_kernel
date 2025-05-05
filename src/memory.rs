@@ -43,6 +43,43 @@ pub struct BootInfoFrameAllocator {
     next: usize,
 }
 
+pub fn map_physical_region(
+    page: Page<Size4KiB>,
+    frame: PhysFrame<Size4KiB>,
+    flags: PageTableFlags,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> Result<(), &'static str> {
+    use crate::page_table;
+    
+    // Проверяем, можно ли отобразить
+    if !page_table::is_mappable(page, frame, mapper) {
+        return Err("Страница уже отображена на другой фрейм");
+    }
+    
+    // Отображаем страницу
+    page_table::map_page(page, frame, flags, mapper, frame_allocator)
+}
+
+/// Отображает диапазон виртуальных страниц на диапазон физических фреймов
+pub fn map_physical_region_range(
+    start_page: Page<Size4KiB>,
+    start_frame: PhysFrame<Size4KiB>,
+    page_count: usize,
+    flags: PageTableFlags,
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> Result<(), &'static str> {
+    for i in 0..page_count {
+        let page = start_page + i as u64;
+        let frame = start_frame + i as u64;
+        map_physical_region(page, frame, flags, mapper, frame_allocator)?;
+    }
+    
+    Ok(())
+}
+
+
 impl BootInfoFrameAllocator {
     /// Создает новый BootInfoFrameAllocator из переданной карты памяти.
     ///

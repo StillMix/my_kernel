@@ -7,8 +7,8 @@
 
 pub mod memory;
 pub mod vga_buffer; // Новый модуль
+pub mod page_table;
 
-use core::panic::PanicInfo;
 
 // Функции для тестирования
 pub trait Testable {
