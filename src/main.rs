@@ -7,9 +7,9 @@ use my_os::println;
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     // Выводим приветствие
-    println!("Привет, мир!");
-    println!("Добро пожаловать в мою ОС!");
-    println!("Нажмите клавишу для проверки...");
+    println!("Hello, World!");
+    println!("Welcome to my OS!");
+    println!("Press a key to test...");
     
     loop {
         // Пытаемся прочитать данные с клавиатуры

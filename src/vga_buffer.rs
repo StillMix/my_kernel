@@ -102,11 +102,11 @@ impl Writer {
     pub fn write_string(&mut self, s: &str) {
         for c in s.chars() {
             match c {
-                // ASCII-символы и перевод строки обрабатываем как раньше
+                // ASCII characters and line feed
                 '\n' => self.new_line(),
                 c if c.is_ascii() && c as u8 >= 0x20 && c as u8 <= 0x7e => self.write_byte(c as u8),
-                // Для русских и других символов используем функцию конвертации
-                _ => self.write_byte(utf8_to_cp866(c)),
+                // For non-ASCII characters, just print a question mark
+                _ => self.write_byte(b'?'),
             }
         }
     }
