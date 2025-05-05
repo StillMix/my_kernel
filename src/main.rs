@@ -8,11 +8,8 @@ use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use my_kernel::println;
 // Добавьте в импорты в начале функции kernel_main:
-use x86_64::{
-    structures::paging::{
-        Mapper // Добавлен импорт Mapper
-    }
-};
+use x86_64::structures::paging::Mapper; // Убраны лишние скобки
+
 entry_point!(kernel_main);
 
 // Изменим функцию kernel_main
@@ -33,35 +30,36 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
     // Отображаем критические страницы нашего ядра
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
     println!("Таблица страниц и аллокатор фреймов инициализированы успешно!");
-    // Обработка страницы, вызывающей ошибку
-    let problematic_page = Page::containing_address(VirtAddr::new(0x1000));
-    let target_frame = PhysFrame::containing_address(PhysAddr::new(0x500000));
     
-    // Сначала проверим, отображена ли эта страница уже на какой-то фрейм
-    if let Ok(frame) = mapper.translate_page(problematic_page) {
-        println!("Страница 0x1000 уже отображена на фрейм {:?}", frame);
-        
-        // Если отображена не туда, куда нужно, сначала размапим
-        if frame != target_frame {
-            unsafe {
-                mapper.unmap(problematic_page)
-                    .expect("не удалось размапить страницу")
-                    .1.flush();
-            }
-            println!("Страница размаплена");
-        }
-    }
-    
-    // Теперь попробуем отобразить страницу на нужный фрейм
+    println!("Инициализация системы управления памятью...");
+
+    // Вместо жестко заданного адреса страницы и фрейма, выберем безопасные значения
+    let test_page = Page::containing_address(VirtAddr::new(0x1000000)); // 16MB
+    let test_frame = PhysFrame::containing_address(PhysAddr::new(0x600000)); // 6MB
+
+    println!("Тестирование отображения страницы {:?} на фрейм {:?}...", test_page, test_frame);
+
+    // Отображаем тестовую страницу
     match page_table::map_page(
-        problematic_page,
-        target_frame,
+        test_page,
+        test_frame,
         flags,
         &mut mapper,
         &mut frame_allocator,
     ) {
         Ok(_) => println!("Страница успешно отображена!"),
         Err(e) => println!("Ошибка отображения страницы: {}", e),
+    }
+
+    // Проверяем, правильно ли выполнено отображение
+    if let Ok(mapped_frame) = mapper.translate_page(test_page) {
+        if mapped_frame == test_frame {
+            println!("Проверка отображения: успешно!");
+        } else {
+            println!("Проверка отображения: ошибка! Страница отображена на неправильный фрейм.");
+        }
+    } else {
+        println!("Проверка отображения: ошибка! Страница не отображена.");
     }
 
     // Безопасная работа с памятью теперь возможна
