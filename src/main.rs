@@ -32,10 +32,10 @@ fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     // Отображаем критические страницы нашего ядра
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
-    
+    println!("Таблица страниц и аллокатор фреймов инициализированы успешно!");
     // Обработка страницы, вызывающей ошибку
     let problematic_page = Page::containing_address(VirtAddr::new(0x1000));
-    let target_frame = PhysFrame::containing_address(PhysAddr::new(0x401000));
+    let target_frame = PhysFrame::containing_address(PhysAddr::new(0x500000));
     
     // Сначала проверим, отображена ли эта страница уже на какой-то фрейм
     if let Ok(frame) = mapper.translate_page(problematic_page) {
