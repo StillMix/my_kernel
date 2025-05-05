@@ -8,9 +8,23 @@ use my_os::println;
 pub extern "C" fn _start() -> ! {
     // Выводим приветствие
     println!("Привет, мир!");
-
-    // В ядре ОС нельзя выйти из _start, поэтому мы делаем бесконечный цикл
-    loop {}
+    println!("Добро пожаловать в мою ОС!");
+    println!("Нажмите клавишу для проверки...");
+    
+    loop {
+        // Пытаемся прочитать данные с клавиатуры
+        use my_os::keyboard;
+        use x86_64::instructions::port::Port;
+        
+        // Проверяем, есть ли данные от клавиатуры
+        let mut status_port = Port::new(0x64);
+        let status: u8 = unsafe { status_port.read() };
+        
+        // Если бит 0 установлен, значит есть данные для чтения
+        if status & 1 == 1 {
+            keyboard::handle_keyboard();
+        }
+    }
 }
 
 // /// Эта функция вызывается при панике
