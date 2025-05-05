@@ -36,7 +36,12 @@ struct ColoredChar {
 
 // Функция для вывода строки на экран
 pub fn print_string(s: &str) {
-    let vga_buffer = unsafe { core::slice::from_raw_parts_mut(VGA_BUFFER_ADDR as *mut ColoredChar, VGA_BUFFER_WIDTH * VGA_BUFFER_HEIGHT) };
+    let vga_buffer = unsafe { 
+        core::slice::from_raw_parts_mut(
+            VGA_BUFFER_ADDR as *mut ColoredChar, 
+            VGA_BUFFER_WIDTH * VGA_BUFFER_HEIGHT
+        ) 
+    };
     
     // Очищаем экран
     for i in 0..(VGA_BUFFER_WIDTH * VGA_BUFFER_HEIGHT) {
@@ -53,9 +58,12 @@ pub fn print_string(s: &str) {
             break;
         }
         
+        // Обработка только печатных ASCII символов
+        let character = if byte >= 32 && byte < 128 { byte } else { b'?' };
+        
         // Записываем символ в буфер
         vga_buffer[i] = ColoredChar {
-            ascii_character: byte,
+            ascii_character: character,
             color_code: create_color_code(Color::White, Color::Black),
         };
     }
