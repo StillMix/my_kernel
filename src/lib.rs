@@ -12,6 +12,7 @@ pub mod vga_buffer;
 pub mod keyboard;
 pub mod interrupts;  
 pub mod terminal;
+pub mod gdt;  // Добавляем новый модуль
 
 #[cfg(not(test))]
 #[panic_handler]
@@ -21,51 +22,28 @@ fn panic(info: &PanicInfo) -> ! {
         x86_64::instructions::hlt();
     }
 }
+
 pub fn init() {
+    serial_println!("Инициализация GDT...");
+    gdt::init();
+    
     serial_println!("Инициализация IDT...");
     interrupts::init_idt();
     
     serial_println!("Инициализация PIC...");
-    
-    // Инициализация PIC (Programmable Interrupt Controller)
     unsafe {
-        // Данные порты для PIC1 и PIC2
-        let mut pic1_cmd: x86_64::instructions::port::Port<u8> = x86_64::instructions::port::Port::new(0x20);
-        let mut pic1_data: x86_64::instructions::port::Port<u8> = x86_64::instructions::port::Port::new(0x21);
-        let mut pic2_cmd: x86_64::instructions::port::Port<u8> = x86_64::instructions::port::Port::new(0xA0);
-        let mut pic2_data: x86_64::instructions::port::Port<u8> = x86_64::instructions::port::Port::new(0xA1);
+        interrupts::PICS.lock().initialize();
         
-        // Инициализация PIC
-        // ICW1: начать инициализацию
-        pic1_cmd.write(0x11);
-        pic2_cmd.write(0x11);
-        
-        // ICW2: определение базовых векторов прерываний
-        pic1_data.write(0x20); // IRQ 0-7: 0x20-0x27
-        pic2_data.write(0x28); // IRQ 8-15: 0x28-0x2F
-        
-        // ICW3: соединение Master/Slave
-        pic1_data.write(0x04); // PIC1 имеет подчиненный PIC на IRQ2 (бит 2)
-        pic2_data.write(0x02); // PIC2 является подчиненным с индексом 2
-        
-        // ICW4: другие настройки
-        pic1_data.write(0x01); // 8086/88 режим
-        pic2_data.write(0x01); // 8086/88 режим
-        
-        // Временно отключаем все прерывания для отладки
-        pic1_data.write(0xFF); // Маскируем все прерывания на PIC1
-        pic2_data.write(0xFF); // Маскируем все прерывания на PIC2
+        // Важно: разрешаем только прерывание клавиатуры
+        // 0xFC вместо 0xFD для проверки - это разрешит IRQ0 (таймер) и IRQ1 (клавиатура)
+        interrupts::PICS.lock().write_masks(0xFC, 0xFF);
     }
     
     serial_println!("Включение прерываний...");
     x86_64::instructions::interrupts::enable();
     
-    // Инициализация клавиатуры отключена для отладки
-    // keyboard::init();
-    
     serial_println!("Инициализация завершена");
 }
-
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
