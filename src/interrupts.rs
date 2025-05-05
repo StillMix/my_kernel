@@ -1,11 +1,12 @@
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
-use x86_64::instructions::port::Port;
 use crate::gdt;
-use lazy_static::lazy_static;
-use spin::Mutex;
 use crate::print;
 use crate::println; // Добавляем импорт макроса println!
-
+use crate::serial_println;
+use lazy_static::lazy_static;
+use pc_keyboard::{layouts, HandleControl, Keyboard, ScancodeSet1};
+use spin::Mutex;
+use x86_64::instructions::port::Port;
+use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
 // Константы для PIC
 const PIC1_COMMAND: u16 = 0x20;
 const PIC1_DATA: u16 = 0x21;
@@ -107,9 +108,7 @@ pub enum InterruptIndex {
 }
 
 // Контроллер прерываний
-static PICS: Mutex<ChainedPics> = Mutex::new(unsafe { 
-    ChainedPics::new(PIC1_OFFSET, PIC2_OFFSET) 
-});
+static PICS: Mutex<ChainedPics> = Mutex::new(unsafe { ChainedPics::new(PIC1_OFFSET, PIC2_OFFSET) });
 
 // Таблица дескрипторов прерываний
 // Добавьте в lazy_static! блок IDT следующие обработчики
@@ -118,20 +117,22 @@ lazy_static! {
         let mut idt = InterruptDescriptorTable::new();
         idt[InterruptIndex::Timer as usize].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard as usize].set_handler_fn(keyboard_interrupt_handler);
-        
+
         // Добавляем обработчик двойного сбоя
         unsafe {
             idt.double_fault.set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        
+
         // Добавляем обработчики базовых исключений
         idt.breakpoint.set_handler_fn(breakpoint_handler);
         idt.invalid_opcode.set_handler_fn(invalid_opcode_handler);
         idt.page_fault.set_handler_fn(page_fault_handler);
-        
+
         idt
     };
+    static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
+    Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore));
 }
 
 // И добавьте сами обработчики
@@ -166,63 +167,76 @@ fn hlt_loop() -> ! {
 
 // Инициализация прерываний
 pub unsafe fn init() {
-    // Загружаем IDT
+    println!("Loading IDT...");
     IDT.load();
-    
+
+    println!("Initializing PIC...");
     // Инициализируем PIC
     PICS.lock().initialize();
-    
+
+    println!("Setting PIC masks...");
     // Маскируем все прерывания, кроме клавиатуры и таймера
+    // 0xFC = 1111 1100 - разрешаем только первые два прерывания (0 и 1)
     PICS.lock().write_masks(0xFC, 0xFF);
-    
+
+    println!("Enabling hardware interrupts...");
     // Разрешаем прерывания
     x86_64::instructions::interrupts::enable();
+
+    println!("Interrupt initialization completed successfully!");
 }
 
 // Обработчик прерывания таймера
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
     unsafe {
-        PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer as u8);
+        PICS.lock()
+            .notify_end_of_interrupt(InterruptIndex::Timer as u8);
     }
 }
 extern "x86-interrupt" fn double_fault_handler(
-    stack_frame: InterruptStackFrame, _error_code: u64) -> !
-{
-    panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+    stack_frame: InterruptStackFrame,
+    _error_code: u64,
+) -> ! {
+    println!("EXCEPTION: DOUBLE FAULT");
+    println!("{:#?}", stack_frame);
+    hlt_loop();
 }
 // Обработчик прерывания клавиатуры
-// Обработчик прерывания клавиатуры
-// Обработчик прерывания клавиатуры
+
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
-    use spin::Mutex;
+    use pc_keyboard::DecodedKey;
     use x86_64::instructions::port::Port;
-    
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> =
-            Mutex::new(Keyboard::new(layouts::Us104Key, ScancodeSet1,
-                HandleControl::Ignore)
-            );
-    }
 
-    let mut keyboard = KEYBOARD.lock();
-    let mut port = Port::new(0x60);
+    // Вывод отладочной информации
+    serial_println!("Keyboard interrupt received!");
 
-    let scancode: u8 = unsafe { port.read() };
-    
-    // Добавим защиту от некорректных скан-кодов
-    if scancode > 0 {
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        let mut keyboard = KEYBOARD.lock();
+        let mut port = Port::new(0x60);
+
+        let scancode: u8 = unsafe { port.read() };
+
+        // Вывод скан-кода
+        serial_println!("Scancode: {}", scancode);
+
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
             if let Some(key) = keyboard.process_keyevent(key_event) {
                 match key {
-                    DecodedKey::Unicode(character) => print!("{}", character),
-                    DecodedKey::RawKey(key) => print!("{:?}", key),
+                    DecodedKey::Unicode(character) => {
+                        serial_println!("Pressed key: {}", character);
+                        print!("{}", character);
+                    }
+                    DecodedKey::RawKey(key) => {
+                        serial_println!("Pressed raw key: {:?}", key);
+                        print!("{:?}", key);
+                    }
                 }
             }
         }
-    }
-    
-    unsafe {
-        PICS.lock().notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
-    }
+
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::Keyboard as u8);
+        }
+    });
 }

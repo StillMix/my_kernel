@@ -6,21 +6,25 @@ use core::panic::PanicInfo;
 
 mod vga_buffer;
 mod interrupts;
-mod gdt; // Добавить импорт модуля GDT
+mod gdt;
+mod serial; // Добавьте эту строку
+
+#[macro_use]
+extern crate lazy_static;
 
 /// Обработчик паники
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("{}", info);
-    loop {
-        x86_64::instructions::hlt();
-    }
+    serial_println!("PANIC: {}", info);
+    hlt_loop();
 }
 
 /// Точка входа
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("Kernel started!");
+    serial_println!("Kernel started via serial!");
     
     // Инициализируем GDT перед прерываниями
     gdt::init();
@@ -35,15 +39,12 @@ pub extern "C" fn _start() -> ! {
     println!("Press any key to test keyboard input...");
     
     // Бесконечный цикл ожидания
-    loop {
-        x86_64::instructions::hlt();
-    }
+    hlt_loop();
 }
 
-
-// Добавьте эту функцию в конец файла
 pub fn hlt_loop() -> ! {
     loop {
+        // Используем интрукцию процессора HLT для экономии энергии
         x86_64::instructions::hlt();
     }
 }

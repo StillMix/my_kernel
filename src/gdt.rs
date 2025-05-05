@@ -2,6 +2,7 @@ use x86_64::VirtAddr;
 use x86_64::structures::tss::TaskStateSegment;
 use x86_64::structures::gdt::{GlobalDescriptorTable, Descriptor, SegmentSelector};
 use lazy_static::lazy_static;
+use crate::println;
 // Добавляем импорт трейта Segment для работы с сегментными регистрами
 use x86_64::instructions::segmentation::Segment;
 
@@ -40,7 +41,10 @@ pub fn init() {
     use x86_64::instructions::tables::load_tss;
     use x86_64::instructions::segmentation::{CS, DS, ES, FS, GS, SS};
 
+    println!("Loading GDT...");
     GDT.0.load();
+    
+    println!("Setting segment registers...");
     unsafe {
         CS::set_reg(GDT.1.code_selector);
         DS::set_reg(GDT.1.data_selector);
@@ -48,6 +52,9 @@ pub fn init() {
         FS::set_reg(GDT.1.data_selector);
         GS::set_reg(GDT.1.data_selector);
         SS::set_reg(GDT.1.data_selector);
+        
+        println!("Loading TSS...");
         load_tss(GDT.1.tss_selector);
     }
+    println!("GDT initialization completed successfully!");
 }
